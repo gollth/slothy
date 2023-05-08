@@ -18,3 +18,10 @@ use the [74HC4051D](https://www.mouser.com/datasheet/2/408/74HC4051D_datasheet_e
 This is mounted on a customly designed shield, where the ESP socks into:
 
 ![shield](./shield.jpg)
+
+# Backend
+
+```bash
+cargo install cargo-watch
+cargo watch -cqw src -x run  # Restart server during development on every file change
+```
