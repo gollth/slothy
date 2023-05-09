@@ -3,7 +3,11 @@ use actix_web::{
     App,
 };
 use chrono::{SubsecRound, Utc};
-use slothy::{server, types::Water, Database};
+use slothy::{
+    server,
+    types::{Observation, Plant},
+    Database,
+};
 
 pub mod common;
 
@@ -22,7 +26,7 @@ async fn get_water_for_plant_404s_if_no_such_plant_exist(db: Database) {
 async fn get_water_for_plant_yields_latest_humidity(db: Database) {
     common::setup();
     let app = init_service(App::new().configure(|c| server(db, c))).await;
-    let request = TestRequest::get().uri("/water/minze").to_request();
+    let request = TestRequest::get().uri("/water/0/0").to_request();
 
     let response = call_service(&app, request).await;
 
@@ -42,40 +46,48 @@ async fn get_water_for_plant_404s_if_no_measurement_ever_taken_for_plant(db: Dat
     common::assert_status_not_found(&response);
 }
 
-#[sqlx::test(fixtures("plants"))]
+#[sqlx::test(fixtures("plants", "water"))]
 async fn put_water_for_plant_adds_humidity(db: Database) {
     common::setup();
     let humidity = 0.88;
-    let plant = "minze";
-    let plant_id = sqlx::query!("SELECT * FROM Plant WHERE UPPER(name)=UPPER(?);", plant)
-        .fetch_one(&db)
-        .await
-        .unwrap()
-        .id;
+    let iot = 0;
+    let sensor = 1;
+
     let app = init_service(App::new().configure(|c| server(db.clone(), c))).await;
     let request = TestRequest::put()
-        .uri(&format!("/water/{plant}/{humidity}"))
+        .uri(&format!("/water/{iot}/{sensor}/{humidity}"))
         .to_request();
 
     let response = call_service(&app, request).await;
     common::assert_status_ok(&response);
 
+    let plant = sqlx::query_as!(
+        Plant,
+        "SELECT * FROM Plant \
+                                        WHERE iot=? AND sensor=?",
+        iot,
+        sensor
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+
     let start = Utc::now().naive_local().trunc_subsecs(0);
     let measurement = sqlx::query_as!(
-        Water,
-        "SELECT Water.* FROM Water \
-         INNER JOIN Plant ON Plant.id=Water.plant \
-         WHERE UPPER(Plant.name)=UPPER(?) \
+        Observation,
+        "SELECT * FROM Observation \
+         WHERE plant=? \
          AND humidity=?;",
-        plant,
+        plant.name,
         humidity
     )
     .fetch_one(&db)
     .await
     .unwrap();
 
-    assert_eq!(measurement.plant, plant_id);
+    assert_eq!(measurement.plant, plant.name);
     assert_eq!(measurement.stamp, start);
+    assert_eq!(measurement.humidity, humidity);
 }
 
 #[sqlx::test(fixtures("plants"))]

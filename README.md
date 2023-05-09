@@ -22,6 +22,8 @@ This is mounted on a customly designed shield, where the ESP socks into:
 # Backend
 
 ```bash
+sudo apt install sqlite3
+cat migrations/00_bootstrap.sql | sqlite3 db.sqlite
 cargo install cargo-watch
 cargo watch -cqw src -x run  # Restart server during development on every file change
 ```

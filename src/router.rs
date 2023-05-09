@@ -6,7 +6,7 @@ use actix_web::{
 };
 
 use crate::{
-    types::{Humidity, Plant},
+    types::{Humidity, Observation, Plant},
     AppState,
 };
 
@@ -15,9 +15,10 @@ async fn homepage(_request: HttpRequest) -> impl Responder {
     HttpResponse::Ok().body("Slothy")
 }
 
-#[get("/plant")]
-async fn get_plants(state: Data<AppState>) -> Result<HttpResponse, Error> {
-    let plants = sqlx::query_as!(Plant, "SELECT * FROM Plant")
+#[get("/plant/{iot}")]
+async fn get_plants(state: Data<AppState>, path: Path<i64>) -> Result<HttpResponse, Error> {
+    let iot = path.into_inner();
+    let plants = sqlx::query_as!(Plant, "SELECT * FROM Plant WHERE iot=?", iot)
         .fetch_all(&state.db)
         .await
         .map_err(ErrorInternalServerError)?;
@@ -25,59 +26,70 @@ async fn get_plants(state: Data<AppState>) -> Result<HttpResponse, Error> {
     Ok(HttpResponse::Ok().json(plants))
 }
 
-#[get("/plant/{name}")]
-async fn get_plant(state: Data<AppState>, path: Path<String>) -> Result<HttpResponse, Error> {
-    let name = path.into_inner();
+#[get("/plant/{iot}/{sensor}")]
+async fn get_plant(state: Data<AppState>, path: Path<(i64, i64)>) -> Result<HttpResponse, Error> {
+    let (iot, sensor) = path.into_inner();
     let plant = sqlx::query_as!(
         Plant,
-        "SELECT * FROM Plant WHERE UPPER(name) = UPPER(?)",
-        name
+        "SELECT * FROM Plant WHERE iot = ? AND sensor = ?",
+        iot,
+        sensor
     )
     .fetch_optional(&state.db)
     .await
     .map_err(ErrorInternalServerError)?
-    .ok_or(ErrorNotFound(format!("No such Plant with name {name}")))?;
+    .ok_or(ErrorNotFound(format!(
+        "No plant configured for IoT device #{iot} and sensor #{sensor}"
+    )))?;
 
     Ok(HttpResponse::Ok().json(plant))
 }
 
-#[get("/water/{plant}")]
-async fn get_water(state: Data<AppState>, path: Path<String>) -> Result<HttpResponse, Error> {
-    let plant = path.into_inner();
-    let water = sqlx::query!(
-        "SELECT humidity \
-         FROM Water \
-         INNER JOIN Plant ON Plant.id=Water.plant \
-         WHERE UPPER(Plant.name)=UPPER(?) \
+#[get("/water/{iot}/{sensor}")]
+async fn get_water(state: Data<AppState>, path: Path<(i64, i64)>) -> Result<HttpResponse, Error> {
+    let (iot, sensor) = path.into_inner();
+    let observation = sqlx::query_as!(
+        Observation,
+        "SELECT * FROM Observation \
+         WHERE plant = ( \
+           SELECT name FROM PLANT \
+           WHERE iot = ? AND sensor = ? \
+         ) \
          ORDER BY stamp DESC;",
-        plant
+        iot,
+        sensor
     )
     .fetch_optional(&state.db)
     .await
     .map_err(ErrorInternalServerError)?
-    .ok_or(ErrorNotFound(format!("No such plant with name {plant}")))?
+    .ok_or(ErrorNotFound(format!(
+        "No plant configured for IoT device #{iot} and sensor #{sensor}"
+    )))?
     .humidity;
 
-    Ok(HttpResponse::Ok().json(water))
+    Ok(HttpResponse::Ok().json(observation))
 }
 
-#[put("/water/{plant}/{humidity}")]
+#[put("/water/{iot}/{sensor}/{humidity}")]
 async fn put_water(
     state: Data<AppState>,
-    path: Path<(String, Humidity)>,
+    path: Path<(i64, i64, Humidity)>,
 ) -> Result<HttpResponse, Error> {
-    let (plant, humid) = path.into_inner();
+    let (iot, sensor, humid) = path.into_inner();
 
     sqlx::query!(
-        "INSERT INTO Water (plant, humidity) \
-         VALUES            ((SELECT id FROM Plant WHERE UPPER(name)=UPPER(?)), ?)",
-        plant,
+        "INSERT INTO Observation (plant, humidity) \
+         VALUES ((SELECT name FROM Plant WHERE iot = ? AND sensor = ?), ?)",
+        iot,
+        sensor,
         humid
     )
     .execute(&state.db)
     .await
     .map_err(|e| match e {
-        sqlx::Error::Database(_) => ErrorNotFound(format!("No such plant with name {plant}")),
+        sqlx::Error::Database(_) => ErrorNotFound(format!(
+            "No plant configured for IoT device #{iot} and sensor #{sensor}"
+        )),
         e => ErrorInternalServerError(e),
     })?;
 
