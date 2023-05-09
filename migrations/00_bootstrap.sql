@@ -5,9 +5,9 @@ CREATE TABLE Plant (
 );
 
 CREATE TABLE Water (
-    id             INTEGER UNIQUE,
-    plant          INTEGER NOT NULL,
-    humidity       REAL,
-    stamp          TEXT    NOT NULL DEFAULT (DATETIME('now')),
+    id             INTEGER  UNIQUE,
+    plant          INTEGER  NOT NULL,
+    humidity       REAL     NOT NULL,
+    stamp          DATETIME NOT NULL DEFAULT (DATETIME('now')),
     PRIMARY KEY (id AUTOINCREMENT)
 );

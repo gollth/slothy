@@ -1,11 +1,14 @@
 use actix_web::{
     error::{ErrorInternalServerError, ErrorNotFound},
-    get,
+    get, put,
     web::{Data, Path},
     Error, HttpRequest, HttpResponse, Responder,
 };
 
-use crate::{types::Plant, AppState};
+use crate::{
+    types::{Humidity, Plant},
+    AppState,
+};
 
 #[get("/")]
 async fn homepage(_request: HttpRequest) -> impl Responder {
@@ -52,8 +55,31 @@ async fn get_water(state: Data<AppState>, path: Path<String>) -> Result<HttpResp
     .fetch_optional(&state.db)
     .await
     .map_err(ErrorInternalServerError)?
-    .ok_or(ErrorNotFound(format!("No such Plant with name {plant}")))?
+    .ok_or(ErrorNotFound(format!("No such plant with name {plant}")))?
     .humidity;
 
     Ok(HttpResponse::Ok().json(water))
+}
+
+#[put("/water/{plant}/{humidity}")]
+async fn put_water(
+    state: Data<AppState>,
+    path: Path<(String, Humidity)>,
+) -> Result<HttpResponse, Error> {
+    let (plant, humid) = path.into_inner();
+
+    sqlx::query!(
+        "INSERT INTO Water (plant, humidity) \
+         VALUES            ((SELECT id FROM Plant WHERE UPPER(name)=UPPER(?)), ?)",
+        plant,
+        humid
+    )
+    .execute(&state.db)
+    .await
+    .map_err(|e| match e {
+        sqlx::Error::Database(_) => ErrorNotFound(format!("No such plant with name {plant}")),
+        e => ErrorInternalServerError(e),
+    })?;
+
+    Ok(HttpResponse::Ok().finish())
 }

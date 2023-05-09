@@ -10,7 +10,7 @@ pub mod common;
 async fn get_plants_index_yields_list(db: Database) {
     common::setup();
     let app = init_service(App::new().configure(|c| server(db, c))).await;
-    let request = TestRequest::default().uri("/plant").to_request();
+    let request = TestRequest::get().uri("/plant").to_request();
 
     let response = call_service(&app, request).await;
 
@@ -30,7 +30,7 @@ async fn get_plants_index_yields_list(db: Database) {
 async fn get_plants_index_yields_empty_list_if_none_ever_created(db: Database) {
     common::setup();
     let app = init_service(App::new().configure(|c| server(db, c))).await;
-    let request = TestRequest::default().uri("/plant").to_request();
+    let request = TestRequest::get().uri("/plant").to_request();
 
     let response = call_service(&app, request).await;
 
@@ -43,7 +43,7 @@ async fn get_plants_index_yields_empty_list_if_none_ever_created(db: Database) {
 async fn get_plant_route_looksup_id_by_name(db: Database) {
     common::setup();
     let app = init_service(App::new().configure(|c| server(db, c))).await;
-    let request = TestRequest::default().uri("/plant/minze").to_request();
+    let request = TestRequest::get().uri("/plant/minze").to_request();
 
     let response = call_service(&app, request).await;
 
@@ -57,9 +57,7 @@ async fn get_plant_route_looksup_id_by_name(db: Database) {
 async fn get_plant_route_404s_if_name_not_given(db: Database) {
     common::setup();
     let app = init_service(App::new().configure(|c| server(db, c))).await;
-    let request = TestRequest::default()
-        .uri("/plant/unknown_plant")
-        .to_request();
+    let request = TestRequest::get().uri("/plant/unknown_plant").to_request();
 
     let response = call_service(&app, request).await;
 

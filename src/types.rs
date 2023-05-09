@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -13,4 +14,14 @@ impl Plant {
             name: name.to_string(),
         }
     }
+}
+
+pub type Humidity = f64;
+
+#[derive(Debug, PartialEq)]
+pub struct Water {
+    pub id: i64,
+    pub plant: i64,
+    pub humidity: Humidity,
+    pub stamp: NaiveDateTime,
 }
