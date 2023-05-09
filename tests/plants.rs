@@ -17,7 +17,11 @@ async fn get_plants_index_yields_list(db: Database) {
     common::assert_status_ok(&response);
     let plants: Vec<Plant> = read_body_json(response).await;
     assert_eq!(
-        vec![Plant::new(0, "Minze"), Plant::new(1, "Schnittlauch"),],
+        vec![
+            Plant::new(0, "Minze"),
+            Plant::new(1, "Schnittlauch"),
+            Plant::new(2, "Paprika")
+        ],
         plants
     );
 }

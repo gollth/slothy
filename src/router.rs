@@ -23,8 +23,8 @@ async fn get_plants(state: Data<AppState>) -> Result<HttpResponse, Error> {
 }
 
 #[get("/plant/{name}")]
-async fn get_plant(state: Data<AppState>, args: Path<String>) -> Result<HttpResponse, Error> {
-    let name = args.into_inner();
+async fn get_plant(state: Data<AppState>, path: Path<String>) -> Result<HttpResponse, Error> {
+    let name = path.into_inner();
     let plant = sqlx::query_as!(
         Plant,
         "SELECT * FROM Plant WHERE UPPER(name) = UPPER(?)",
@@ -36,4 +36,24 @@ async fn get_plant(state: Data<AppState>, args: Path<String>) -> Result<HttpResp
     .ok_or(ErrorNotFound(format!("No such Plant with name {name}")))?;
 
     Ok(HttpResponse::Ok().json(plant))
+}
+
+#[get("/water/{plant}")]
+async fn get_water(state: Data<AppState>, path: Path<String>) -> Result<HttpResponse, Error> {
+    let plant = path.into_inner();
+    let water = sqlx::query!(
+        "SELECT humidity \
+         FROM Water \
+         INNER JOIN Plant ON Plant.id=Water.plant \
+         WHERE UPPER(Plant.name)=UPPER(?) \
+         ORDER BY stamp DESC;",
+        plant
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(ErrorInternalServerError)?
+    .ok_or(ErrorNotFound(format!("No such Plant with name {plant}")))?
+    .humidity;
+
+    Ok(HttpResponse::Ok().json(water))
 }
