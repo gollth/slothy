@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
             .wrap(Logger::default())
             .configure(|c| slothy::server(db.clone(), c))
     })
-    .bind(("localhost", 51074))?
+    .bind(("0.0.0.0", 51074))?
     .run()
     .await?;
     Ok(())
