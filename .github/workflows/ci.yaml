@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    steps:
+    - uses: actions/checkout@v3
+    - name: Bootstrap DB
+      run: cat migrations/00_bootstrap.sql | sqlite3 ../db.sqlite
+    - name: Build
+      run: cargo build
+    - name: Run tests
+      run: cargo test
+
+  iot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Create dummy Wifi Conf
+        run: cp .github/workflows/credentials.h iot/
+      - uses: arduino/compile-sketches@v1.1.0
+        with:
+          sketch-paths: |
+            - iot
+          platforms: |
+            # Install ESP8266 platform via Boards Manager
+            - name: esp8266:esp8266
+              source-url: https://arduino.esp8266.com/stable/package_esp8266com_index.json
+              version: 2.5.0
+
+          fqbn: "esp8266:esp8266:nodemcuv2"

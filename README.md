@@ -1,11 +1,12 @@
 # sIoThy
 
+[![CI](https://github.com/gollth/slothy/actions/workflows/ci.yaml/badge.svg)](https://github.com/gollth/slothy/actions/workflows/ci.yaml)
+
 Soil IoT Humidity Monitor
 
 ## ESP8266
 
 ![pinout](https://i0.wp.com/edistechlab.com/wp-content/uploads/2021/04/WeMos-d1-mini-Pin-out.png)
-
 
 
 ## ADC-Mux Shield
