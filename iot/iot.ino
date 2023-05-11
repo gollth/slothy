@@ -1,3 +1,9 @@
+#include <Arduino.h>
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClient.h>
+#include "credentials.h"
+
 #define D0       16  
 #define D1        5
 #define D2        4
@@ -42,6 +48,28 @@ void setup() {
   pinMode(MUX_B, OUTPUT);
   pinMode(MUX_C, OUTPUT);
   pinMode(A0, INPUT);
+
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  Serial.println("Connecting");
+  while(WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.print("Connected to WiFi network with IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  if(WiFi.status()== WL_CONNECTED){
+      WiFiClient client;
+      HTTPClient http;
+      
+      // Your Domain name with URL path or IP address with path
+      http.begin(client, "http://raspberrypi.local:51074/water/0/0/0.42");
+      int httpResponseCode = http.PUT("");
+      Serial.print("HTTP Response code: ");
+      Serial.println(httpResponseCode);
+      http.end();
+  }
 }
 
 
