@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
+#include <ArduinoJson.h>
 #include <WiFiClient.h>
 #include "credentials.h"
 
@@ -20,6 +21,8 @@
 
 #define DEEP_SLEEP           D0
 #define DEEP_SLEEP_PERIOD_S  30
+
+#define URL_HUMIDITY   "http://raspberrypi.local:51074/water"
 
 #define ANA_SRC_VOLTAGE    6
 #define ANA_SRC_HUMID_0    5
@@ -46,7 +49,7 @@ char ANA_SRC_HUMIDS[6] = {
 };
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   pinMode(MUX_A, OUTPUT);
   pinMode(MUX_B, OUTPUT);
   pinMode(MUX_C, OUTPUT);
@@ -54,9 +57,11 @@ void setup() {
 
   connect_to_wifi();
   WiFiClient wifi;
+  HTTPClient http;
+  http.begin(wifi, URL_HUMIDITY);
 
-  long long unsigned int id = ESP.getChipId();
-  Serial.printf("ESP8266 Chip id = 0x%08x\n", id);
+  uint64_t id = ESP.getChipId();
+  Serial.printf("ESP8266 Chip ID: %llu\n", id);
 
   Serial.print(">> Voltage: "); Serial.print(readVoltage()); Serial.println(" V");
   for (int i = 0; i < 6; i++) {
@@ -65,14 +70,16 @@ void setup() {
     Serial.print(humidity, 0);
     Serial.println(" %");
 
-    send_to_backend(wifi, id, i, humidity);
+    send_to_backend(http, id, i, humidity);
   }
 
+  http.end();
   deep_sleep();
 }
 
 void connect_to_wifi() {
   WiFi.begin(WIFI_SSID, WIFI_PASS);
+  Serial.println("");
   Serial.println("Connecting");
   while(WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -83,14 +90,19 @@ void connect_to_wifi() {
   Serial.println(WiFi.localIP());
 }
 
-void send_to_backend(WiFiClient& wifi, int id, int sensor, double humidity) {
-  HTTPClient http;
-  String url = String("http://raspberrypi.local:51074/water/") + String(id) + String("/") + String(sensor) + String("/") + String(humidity);
-  Serial.print("PUT "); Serial.println(url);
-  http.begin(wifi, url);
-  int code = http.PUT("");
-  Serial.print("HTTP Response: "); Serial.println(code);
-  http.end();
+void send_to_backend(HTTPClient& http, uint64_t id, int sensor, double humidity) {
+  StaticJsonDocument<JSON_OBJECT_SIZE(3)> json;
+  json["id"] = id;
+  json["sensor"] = sensor;
+  json["humidity"] = humidity;
+  char buffer[1024];
+  serializeJson(json, buffer);
+  Serial.print("PUT "); Serial.println(URL_HUMIDITY);
+  Serial.print("    "); Serial.println(buffer);
+
+  http.addHeader("Content-Type", "application/json");
+  int code = http.PUT(buffer);
+  Serial.print("    Response: "); Serial.println(code);
 }
 
 

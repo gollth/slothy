@@ -5,7 +5,7 @@ use actix_web::{
 use chrono::{SubsecRound, Utc};
 use slothy::{
     server,
-    types::{Observation, Plant},
+    types::{Measurement, Observation, Plant},
     Database,
 };
 
@@ -55,7 +55,12 @@ async fn put_water_for_plant_adds_humidity(db: Database) {
 
     let app = init_service(App::new().configure(|c| server(db.clone(), c))).await;
     let request = TestRequest::put()
-        .uri(&format!("/water/{iot}/{sensor}/{humidity}"))
+        .uri(&format!("/water"))
+        .set_json(Measurement {
+            id: iot,
+            sensor,
+            humidity,
+        })
         .to_request();
 
     let response = call_service(&app, request).await;
@@ -64,7 +69,7 @@ async fn put_water_for_plant_adds_humidity(db: Database) {
     let plant = sqlx::query_as!(
         Plant,
         "SELECT * FROM Plant \
-                                        WHERE iot=? AND sensor=?",
+         WHERE iot=? AND sensor=?",
         iot,
         sensor
     )
@@ -95,7 +100,12 @@ async fn put_water_for_plants_404s_if_plant_does_not_exist(db: Database) {
     common::setup();
     let app = init_service(App::new().configure(|c| server(db, c))).await;
     let request = TestRequest::put()
-        .uri("/water/unknown_plant/42")
+        .uri("/water")
+        .set_json(Measurement {
+            id: 0,
+            sensor: 17,
+            humidity: 0.123,
+        })
         .to_request();
 
     let response = call_service(&app, request).await;

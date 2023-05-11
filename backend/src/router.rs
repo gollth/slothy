@@ -1,12 +1,12 @@
 use actix_web::{
     error::{ErrorInternalServerError, ErrorNotFound},
     get, put,
-    web::{Data, Path},
+    web::{Data, Json, Path},
     Error, HttpRequest, HttpResponse, Responder,
 };
 
 use crate::{
-    types::{Humidity, Observation, Plant},
+    types::{Measurement, Observation, Plant},
     AppState,
 };
 
@@ -70,25 +70,24 @@ async fn get_water(state: Data<AppState>, path: Path<(i64, i64)>) -> Result<Http
     Ok(HttpResponse::Ok().json(observation))
 }
 
-#[put("/water/{iot}/{sensor}/{humidity}")]
+#[put("/water")]
 async fn put_water(
     state: Data<AppState>,
-    path: Path<(i64, i64, Humidity)>,
+    payload: Json<Measurement>,
 ) -> Result<HttpResponse, Error> {
-    let (iot, sensor, humid) = path.into_inner();
-
     sqlx::query!(
         "INSERT INTO Observation (plant, humidity) \
          VALUES ((SELECT name FROM Plant WHERE iot = ? AND sensor = ?), ?)",
-        iot,
-        sensor,
-        humid
+        payload.id,
+        payload.sensor,
+        payload.humidity
     )
     .execute(&state.db)
     .await
     .map_err(|e| match e {
         sqlx::Error::Database(_) => ErrorNotFound(format!(
-            "No plant configured for IoT device #{iot} and sensor #{sensor}"
+            "No plant configured for IoT device #{} and sensor #{}",
+            payload.id, payload.sensor
         )),
         e => ErrorInternalServerError(e),
     })?;
