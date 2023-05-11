@@ -70,7 +70,9 @@ void setup() {
     Serial.print(humidity, 0);
     Serial.println(" %");
 
-    send_to_backend(http, id, i, humidity);
+    if (not isnan(humidity)) {
+      send_to_backend(http, id, i, humidity);
+    }
   }
 
   http.end();

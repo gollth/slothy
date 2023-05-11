@@ -47,7 +47,7 @@ async fn get_water_for_plant_404s_if_no_measurement_ever_taken_for_plant(db: Dat
 }
 
 #[sqlx::test(fixtures("plants", "water"))]
-async fn put_water_for_plant_adds_humidity(db: Database) {
+async fn put_water_adds_humidity(db: Database) {
     common::setup();
     let humidity = 0.88;
     let iot = 0;
@@ -96,7 +96,7 @@ async fn put_water_for_plant_adds_humidity(db: Database) {
 }
 
 #[sqlx::test(fixtures("plants"))]
-async fn put_water_for_plants_404s_if_plant_does_not_exist(db: Database) {
+async fn put_water_404s_if_plant_does_not_exist(db: Database) {
     common::setup();
     let app = init_service(App::new().configure(|c| server(db, c))).await;
     let request = TestRequest::put()
@@ -110,4 +110,23 @@ async fn put_water_for_plants_404s_if_plant_does_not_exist(db: Database) {
 
     let response = call_service(&app, request).await;
     common::assert_status_not_found(&response);
+}
+
+#[sqlx::test(fixtures("plants"))]
+async fn put_water_ignores_nan_values(db: Database) {
+    common::setup();
+    let id = 0;
+    let sensor = 0;
+    let app = init_service(App::new().configure(|c| server(db.clone(), c))).await;
+    let request = TestRequest::put()
+        .uri("/water")
+        .set_json(Measurement {
+            id,
+            sensor,
+            humidity: f64::NAN,
+        })
+        .to_request();
+
+    let response = call_service(&app, request).await;
+    common::assert_status_bad_request(&response);
 }
