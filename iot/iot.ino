@@ -4,7 +4,7 @@
 #include <WiFiClient.h>
 #include "credentials.h"
 
-#define D0       16  
+#define D0       16
 #define D1        5
 #define D2        4
 #define D3        0
@@ -12,11 +12,14 @@
 #define D5       14
 #define D6       12
 #define D7       13
-#define D8       15 
+#define D8       15
 
 #define MUX_A   D6
 #define MUX_B   D5
-#define MUX_C   D0
+#define MUX_C   D7
+
+#define DEEP_SLEEP           D0
+#define DEEP_SLEEP_PERIOD_S  30
 
 #define ANA_SRC_VOLTAGE    6
 #define ANA_SRC_HUMID_0    5
@@ -29,7 +32,7 @@
 #define ANA_VOLTAGE_REF    3.3     // Reference voltage corresponding to 1023 of ADC [V]
 
 #define HUMIDITY_ADC_DRY   800     // ADC value when reading complete dry soil [0..1023]
-#define HUMIDITY_ADC_WET   200     // ADC value when reading complete wet soid [0..1023] 
+#define HUMIDITY_ADC_WET   200     // ADC value when reading complete wet soid [0..1023]
 #define VOLTAGE_DIVIDER_R1 92e3    // Low-side resistor of voltage divider [Ohm]
 #define VOLTAGE_DIVIDER_R2 48e3    // High-side resistor of voltage divider [Ohm]
 
@@ -49,6 +52,26 @@ void setup() {
   pinMode(MUX_C, OUTPUT);
   pinMode(A0, INPUT);
 
+  connect_to_wifi();
+  WiFiClient wifi;
+
+  long long unsigned int id = ESP.getChipId();
+  Serial.printf("ESP8266 Chip id = 0x%08x\n", id);
+
+  Serial.print(">> Voltage: "); Serial.print(readVoltage()); Serial.println(" V");
+  for (int i = 0; i < 6; i++) {
+    double humidity = readHumitiy(ANA_SRC_HUMIDS[i]);
+    Serial.print(">> Humidity #: "); Serial.print(i); Serial.print(": ");
+    Serial.print(humidity, 0);
+    Serial.println(" %");
+
+    send_to_backend(wifi, id, i, humidity);
+  }
+
+  deep_sleep();
+}
+
+void connect_to_wifi() {
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   Serial.println("Connecting");
   while(WiFi.status() != WL_CONNECTED) {
@@ -58,18 +81,16 @@ void setup() {
   Serial.println("");
   Serial.print("Connected to WiFi network with IP Address: ");
   Serial.println(WiFi.localIP());
+}
 
-  if(WiFi.status()== WL_CONNECTED){
-      WiFiClient client;
-      HTTPClient http;
-      
-      // Your Domain name with URL path or IP address with path
-      http.begin(client, "http://raspberrypi.local:51074/water/0/0/0.42");
-      int httpResponseCode = http.PUT("");
-      Serial.print("HTTP Response code: ");
-      Serial.println(httpResponseCode);
-      http.end();
-  }
+void send_to_backend(WiFiClient& wifi, int id, int sensor, double humidity) {
+  HTTPClient http;
+  String url = String("http://raspberrypi.local:51074/water/") + String(id) + String("/") + String(sensor) + String("/") + String(humidity);
+  Serial.print("PUT "); Serial.println(url);
+  http.begin(wifi, url);
+  int code = http.PUT("");
+  Serial.print("HTTP Response: "); Serial.println(code);
+  http.end();
 }
 
 
@@ -85,7 +106,7 @@ float readHumitiy(char channel) {
   if(x > HUMIDITY_ADC_DRY + 25 || x < HUMIDITY_ADC_WET - 25) {
     return NAN;
   }
-  
+
   return 100.0 - 100.0 * ((float)x - HUMIDITY_ADC_WET) / (HUMIDITY_ADC_DRY - HUMIDITY_ADC_WET);
 }
 float readVoltage() {
@@ -93,13 +114,11 @@ float readVoltage() {
   return (x * ANA_VOLTAGE_REF * (VOLTAGE_DIVIDER_R1 + VOLTAGE_DIVIDER_R2)) / (VOLTAGE_DIVIDER_R1 * 1023);
 }
 
-void loop() {
-  Serial.print(">> Voltage: "); Serial.print(readVoltage()); Serial.println(" V");
-  for (int i = 0; i < 6; i++) {
-    Serial.print(">> Humidity #: "); Serial.print(i); Serial.print(": "); 
-    Serial.print(readHumitiy(ANA_SRC_HUMIDS[i]), 0); 
-    Serial.println(" %");
-  }
-  
-  delay(2500);
+
+void deep_sleep() {
+  Serial.println("Entering deep sleep...");
+  ESP.deepSleep(DEEP_SLEEP_PERIOD_S * 1e6);
+  yield();
 }
+
+void loop() {}
