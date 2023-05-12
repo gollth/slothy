@@ -103,7 +103,7 @@ void send_to_backend(HTTPClient& http, uint64_t id, int sensor, double humidity)
   Serial.print("    "); Serial.println(buffer);
 
   http.addHeader("Content-Type", "application/json");
-  int code = http.PUT(buffer);
+  int code = http.POST(buffer);
   Serial.print("    Response: "); Serial.println(code);
 }
 

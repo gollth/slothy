@@ -1,6 +1,6 @@
 use actix_web::{
-    error::{ErrorInternalServerError, ErrorNotFound},
-    get, put,
+    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
+    get, post,
     web::{Data, Json, Path},
     Error, HttpRequest, HttpResponse, Responder,
 };
@@ -70,8 +70,8 @@ async fn get_water(state: Data<AppState>, path: Path<(i64, i64)>) -> Result<Http
     Ok(HttpResponse::Ok().json(observation))
 }
 
-#[put("/water")]
-async fn put_water(
+#[post("/measurement/water")]
+async fn post_water(
     state: Data<AppState>,
     payload: Json<Measurement>,
 ) -> Result<HttpResponse, Error> {
@@ -85,7 +85,7 @@ async fn put_water(
     .execute(&state.db)
     .await
     .map_err(|e| match e {
-        sqlx::Error::Database(_) => ErrorNotFound(format!(
+        sqlx::Error::Database(_) => ErrorBadRequest(format!(
             "No plant configured for IoT device #{} and sensor #{}",
             payload.id, payload.sensor
         )),

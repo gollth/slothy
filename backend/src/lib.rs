@@ -4,7 +4,7 @@ pub mod types;
 use crate::router::homepage;
 
 use actix_web::web::{Data, ServiceConfig};
-use router::{get_plant, get_plants, get_water, put_water};
+use router::{get_plant, get_plants, get_water, post_water};
 use sqlx::{Pool, Sqlite};
 
 pub type Database = Pool<Sqlite>;
@@ -20,5 +20,5 @@ pub fn server(db: Database, config: &mut ServiceConfig) {
         .service(get_plant)
         .service(get_plants)
         .service(get_water)
-        .service(put_water);
+        .service(post_water);
 }
