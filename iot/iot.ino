@@ -22,7 +22,7 @@
 #define DEEP_SLEEP           D0
 #define DEEP_SLEEP_PERIOD_S  30
 
-#define URL_HUMIDITY   "http://raspberrypi.local:51074/water"
+#define URL_BASE   "http://homeassistant.local:8123/api/states/sensor."
 
 #define ANA_SRC_VOLTAGE    6
 #define ANA_SRC_HUMID_0    5
@@ -34,10 +34,10 @@
 
 #define ANA_VOLTAGE_REF    3.3     // Reference voltage corresponding to 1023 of ADC [V]
 
-#define HUMIDITY_ADC_DRY   800     // ADC value when reading complete dry soil [0..1023]
-#define HUMIDITY_ADC_WET   200     // ADC value when reading complete wet soid [0..1023]
-#define VOLTAGE_DIVIDER_R1 92e3    // Low-side resistor of voltage divider [Ohm]
-#define VOLTAGE_DIVIDER_R2 48e3    // High-side resistor of voltage divider [Ohm]
+#define HUMIDITY_ADC_DRY   550     // ADC value when reading complete dry soil [0..1023]
+#define HUMIDITY_ADC_WET   300     // ADC value when reading complete wet soid [0..1023]
+#define VOLTAGE_DIVIDER_R1 97.7e3  // Low-side resistor of voltage divider [Ohm]
+#define VOLTAGE_DIVIDER_R2 47.3e3  // High-side resistor of voltage divider [Ohm]
 
 char ANA_SRC_HUMIDS[6] = {
   ANA_SRC_HUMID_0,
@@ -48,34 +48,45 @@ char ANA_SRC_HUMIDS[6] = {
   ANA_SRC_HUMID_5
 };
 
+String SENSOR_NAMES[6] = {
+  "Lauch/Minze",
+  "Pflücksalat",
+  "Zwiebeln (links)",
+  "Zwiebeln (rechts)",
+  "Knoblauch",
+  "Schnittlauch/Petersilie"
+};
+
+#define BATTERY_NAME  "Batterie (Ost)"
+
 void setup() {
   Serial.begin(115200);
   pinMode(MUX_A, OUTPUT);
   pinMode(MUX_B, OUTPUT);
   pinMode(MUX_C, OUTPUT);
   pinMode(A0, INPUT);
-
-  connect_to_wifi();
-  WiFiClient wifi;
-  HTTPClient http;
-  http.begin(wifi, URL_HUMIDITY);
-
+  
   uint64_t id = ESP.getChipId();
   Serial.printf("ESP8266 Chip ID: %llu\n", id);
 
-  Serial.print(">> Voltage: "); Serial.print(readVoltage()); Serial.println(" V");
+  connect_to_wifi();
+  WiFiClient wifi;
+
+  float voltage = readVoltage();
+  Serial.print(">> Voltage: "); Serial.print(voltage); Serial.println(" V");
+  send_to_backend(wifi, id, 'v', BATTERY_NAME, String(voltage, 3), "V");
   for (int i = 0; i < 6; i++) {
-    double humidity = readHumitiy(ANA_SRC_HUMIDS[i]);
+    int h = readAnalogFrom(ANA_SRC_HUMIDS[i]);
+    float humidity = calculateHumitiy(h);
     Serial.print(">> Humidity #: "); Serial.print(i); Serial.print(": ");
-    Serial.print(humidity, 0);
-    Serial.println(" %");
+    Serial.print(humidity, 0); Serial.print(" %");
+    Serial.print(" ("); Serial.print(h); Serial.println(")");
 
     if (not isnan(humidity)) {
-      send_to_backend(http, id, i, humidity);
+      send_to_backend(wifi, id, i + '1', SENSOR_NAMES[i].c_str(), String(humidity, 0), "%");
     }
   }
 
-  http.end();
   deep_sleep();
 }
 
@@ -92,19 +103,32 @@ void connect_to_wifi() {
   Serial.println(WiFi.localIP());
 }
 
-void send_to_backend(HTTPClient& http, uint64_t id, int sensor, double humidity) {
-  StaticJsonDocument<JSON_OBJECT_SIZE(3)> json;
-  json["id"] = id;
-  json["sensor"] = sensor;
-  json["humidity"] = humidity;
+void send_to_backend(WiFiClient& wifi, uint64_t id, char sensor, const char* title, String value, String unit) {
+  String url = String(URL_BASE) + String("slothy_") + String(id, HEX) + "_" + sensor;
+  
+  HTTPClient http;
+  http.begin(wifi, url);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Authorization", String("Bearer ") + String(LONG_LIVED_ACCESS_TOKEN));
+
+  // Refer to https://arduinojson.org/v5/assistant/ for size calculation
+  StaticJsonDocument<170> json;
+  json["state"] = value;
+
+  JsonObject attributes = json.createNestedObject("attributes");
+  attributes["unit_of_measurement"] = unit;
+  attributes["friendly_name"] = title;
+  
   char buffer[1024];
   serializeJson(json, buffer);
-  Serial.print("PUT "); Serial.println(URL_HUMIDITY);
-  Serial.print("    "); Serial.println(buffer);
+  Serial.print("POST: "); Serial.println(url);
+  Serial.print ("    >> "); Serial.println(buffer);
 
-  http.addHeader("Content-Type", "application/json");
   int code = http.POST(buffer);
-  Serial.print("    Response: "); Serial.println(code);
+  Serial.print("    << "); Serial.println(code);
+  Serial.print("    << "); Serial.println(http.getString());
+  
+  http.end();
 }
 
 
@@ -115,8 +139,7 @@ int readAnalogFrom(char channel) {
   return analogRead(A0);
 }
 
-float readHumitiy(char channel) {
-  int x = readAnalogFrom(channel);
+float calculateHumitiy(int x) {
   if(x > HUMIDITY_ADC_DRY + 25 || x < HUMIDITY_ADC_WET - 25) {
     return NAN;
   }
